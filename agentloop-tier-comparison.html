@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentLoop — Base vs Growth</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #060911;
+    --surface: rgba(255,255,255,0.015);
+    --border: rgba(255,255,255,0.04);
+    --accent: #6366F1;
+    --accent-light: #A5B4FC;
+    --accent2: #8B5CF6;
+    --green: #22C55E;
+    --amber: #F59E0B;
+    --serif: 'Newsreader', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  body { background: var(--bg); color: #CBD5E1; font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  .wrapper { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* Tabs */
+  .tabs { display: flex; justify-content: center; gap: 4px; margin-bottom: 40px; }
+  .tab-btn {
+    padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer;
+    background: rgba(255,255,255,0.03); color: #475569;
+    font-size: 13px; font-weight: 600; font-family: var(--sans); transition: all 0.2s;
+  }
+  .tab-btn.active { background: rgba(99,102,241,0.12); color: var(--accent-light); }
+  .tab-btn:hover:not(.active) { background: rgba(255,255,255,0.05); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Grid */
+  .split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 800px) { .split-grid { grid-template-columns: 1fr; } }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .card-growth { background: rgba(99,102,241,0.02); border-color: rgba(99,102,241,0.08); }
+
+  /* Section labels */
+  .section-label { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .section-label span.icon { font-size: 14px; }
+  .section-label span.text { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.1em; }
+  .section-label span.text.locked { color: #334155; }
+  .section-label .badge-growth { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(99,102,241,0.08); color: #818CF8; font-weight: 600; }
+
+  /* Blur overlay */
+  .blur-wrap { position: relative; }
+  .blur-content { filter: blur(6px); opacity: 0.4; pointer-events: none; user-select: none; }
+  .blur-overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px;
+    background: rgba(6,9,17,0.5); border-radius: 14px;
+  }
+  .blur-lock {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.2);
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+
+  /* Funnel bars */
+  .funnel-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .funnel-bar {
+    height: 26px; border-radius: 6px; display: flex; align-items: center; padding-left: 8px;
+    font-size: 11px; font-weight: 600; color: var(--accent-light); font-family: var(--mono);
+  }
+  .funnel-label { font-size: 11px; color: #475569; white-space: nowrap; }
+
+  /* Lead cards */
+  .lead-card {
+    padding: 12px 16px; border-radius: 10px; margin-bottom: 6px;
+    background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  }
+  .lead-quote { font-size: 13px; color: #E2E8F0; font-family: var(--serif); font-style: italic; line-height: 1.5; margin-bottom: 8px; }
+  .signal-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(99,102,241,0.08); color: var(--accent-light); display: inline-block; margin-right: 4px; }
+  .lead-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(99,102,241,0.4); display: inline-block; margin-right: 4px; }
+
+  /* Gap cards */
+  .gap-card {
+    padding: 12px 16px; border-radius: 10px; margin-bottom: 6px;
+    background: rgba(245,158,11,0.03); border: 1px solid rgba(245,158,11,0.08);
+  }
+
+  /* Trained / pending tags */
+  .tag-done { font-size: 10px; padding: 3px 8px; border-radius: 5px; background: rgba(34,197,94,0.08); color: #4ADE80; display: inline-block; margin: 2px; }
+  .tag-pending { font-size: 10px; padding: 3px 8px; border-radius: 5px; background: rgba(99,102,241,0.06); color: #818CF8; border: 1px dashed rgba(99,102,241,0.2); display: inline-block; margin: 2px; }
+
+  /* KPI boxes */
+  .kpi-row { display: flex; gap: 8px; }
+  .kpi-box { flex: 1; padding: 12px; border-radius: 10px; background: rgba(255,255,255,0.025); text-align: center; }
+  .kpi-num { font-size: 22px; font-weight: 700; font-family: var(--mono); }
+  .kpi-label { font-size: 10px; color: #475569; margin-top: 2px; }
+
+  /* Progress bar */
+  .progress-track { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.04); display: flex; overflow: hidden; }
+
+  /* CTA */
+  .cta-box {
+    padding: 20px; border-radius: 14px; position: relative; overflow: hidden;
+    background: linear-gradient(135deg, rgba(99,102,241,0.07), rgba(139,92,246,0.03));
+    border: 1px solid rgba(99,102,241,0.1);
+  }
+  .cta-box::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  /* Miss list */
+  .miss-item { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
+  .miss-x { color: #EF4444; font-size: 14px; margin-top: 1px; flex-shrink: 0; }
+
+  /* Growth reveal items */
+  .reveal-item { display: flex; gap: 14px; align-items: flex-start; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .reveal-item:last-child { border-bottom: none; }
+  .reveal-icon { font-size: 18px; flex-shrink: 0; }
+
+  /* Column headers */
+  .col-header {
+    padding: 16px 20px; border-radius: 14px 14px 0 0; text-align: center;
+    border: 1px solid var(--border); border-bottom: none;
+  }
+  .col-header-base { background: rgba(255,255,255,0.03); }
+  .col-header-growth { background: rgba(99,102,241,0.06); border-color: rgba(99,102,241,0.12); position: relative; overflow: hidden; }
+  .col-header-growth::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .col-body { padding: 24px; border-radius: 0 0 14px 14px; display: flex; flex-direction: column; gap: 24px; }
+  .col-body-base { background: var(--surface); border: 1px solid var(--border); border-top: none; }
+  .col-body-growth { background: rgba(99,102,241,0.02); border: 1px solid rgba(99,102,241,0.08); border-top: none; }
+
+  .topic-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .trending-tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(245,158,11,0.12); color: var(--amber); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+  <!-- Header -->
+  <div style="padding-top: 48px; margin-bottom: 40px; text-align: center;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px;">
+      <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #6366F1, #8B5CF6); display: flex; align-items: center; justify-content: center; font-size: 12px;">⟳</div>
+      <span style="font-size: 12px; font-weight: 700; color: #6366F1; letter-spacing: 0.08em;">AGENTLOOP</span>
+    </div>
+    <h1 style="font-size: 36px; font-weight: 500; color: #F1F5F9; font-family: var(--serif); line-height: 1.25; margin-bottom: 12px;">
+      Samma agent. Samma konversationer.<br>
+      <span style="color: #A5B4FC;">Helt olika insikter.</span>
+    </h1>
+    <p style="font-size: 16px; color: #64748B; max-width: 520px; margin: 0 auto;">
+      Se exakt vad du får — och vad du missar — på varje tier.
+    </p>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('split')">Jämför sida vid sida</button>
+    <button class="tab-btn" onclick="switchTab('base')">Vad Base visar</button>
+    <button class="tab-btn" onclick="switchTab('growth')">Vad Growth avslöjar</button>
+  </div>
+
+  <!-- ═══════════ SPLIT VIEW ═══════════ -->
+  <div id="tab-split" class="tab-content active">
+    <div class="split-grid">
+
+      <!-- BASE COLUMN -->
+      <div>
+        <div class="col-header col-header-base">
+          <span style="font-size: 14px; font-weight: 700; color: #94A3B8;">Base</span>
+          <span style="font-size: 12px; color: #334155; margin-left: 8px;">5–15k SEK/mån</span>
+        </div>
+        <div class="col-body col-body-base">
+
+          <!-- Stats -->
+          <div>
+            <div class="section-label"><span class="icon">📊</span><span class="text">Grundläggande statistik</span></div>
+            <div style="display: flex; gap: 16px;">
+              <div style="flex: 1; padding: 16px; border-radius: 10px; background: rgba(255,255,255,0.025); text-align: center;">
+                <div style="font-size: 28px; font-weight: 700; color: #94A3B8; font-family: var(--mono);">118</div>
+                <div style="font-size: 11px; color: #475569; margin-top: 4px;">Konversationer</div>
+              </div>
+              <div style="flex: 1; padding: 16px; border-radius: 10px; background: rgba(255,255,255,0.025); text-align: center;">
+                <div style="font-size: 28px; font-weight: 700; color: #94A3B8; font-family: var(--mono);">91%</div>
+                <div style="font-size: 11px; color: #475569; margin-top: 4px;">Svarsfrekvens</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Topics -->
+          <div>
+            <div class="section-label"><span class="icon">💬</span><span class="text">Vanligaste ämnena</span></div>
+            <div class="topic-row"><span style="font-size:12px;color:#334155;font-family:var(--mono);min-width:20px;">1.</span><span style="font-size:13px;color:#94A3B8;flex:1;">Företagsinfo</span><span style="font-size:13px;color:#475569;font-family:var(--mono);">37</span></div>
+            <div class="topic-row"><span style="font-size:12px;color:#334155;font-family:var(--mono);min-width:20px;">2.</span><span style="font-size:13px;color:#94A3B8;flex:1;">Förmåner</span><span style="font-size:13px;color:#475569;font-family:var(--mono);">30</span></div>
+            <div class="topic-row"><span style="font-size:12px;color:#334155;font-family:var(--mono);min-width:20px;">3.</span><span style="font-size:13px;color:#94A3B8;flex:1;">Jobbförfrågan</span><span style="font-size:13px;color:#475569;font-family:var(--mono);">20</span></div>
+            <div class="topic-row"><span style="font-size:12px;color:#334155;font-family:var(--mono);min-width:20px;">4.</span><span style="font-size:13px;color:#94A3B8;flex:1;">Löner</span><span style="font-size:13px;color:#475569;font-family:var(--mono);">15</span></div>
+          </div>
+
+          <!-- LOCKED: Leads -->
+          <div>
+            <div class="section-label"><span class="icon">🎯</span><span class="text locked">Lead-identifiering</span><span class="badge-growth">GROWTH</span></div>
+            <div class="blur-wrap">
+              <div class="blur-content">
+                <div style="padding: 16px; border-radius: 10px; background: rgba(255,255,255,0.02);">
+                  <p style="font-size: 13px; color: #94A3B8;">Jag tar min master från handels nu till våren...</p>
+                  <p style="font-size: 13px; color: #94A3B8; margin-top: 8px;">Jag jobbar som CFO idag. Funderar på...</p>
+                </div>
+              </div>
+              <div class="blur-overlay">
+                <div class="blur-lock">🔒</div>
+                <span style="font-size: 12px; font-weight: 600; color: #A5B4FC;">106 leads identifierade</span>
+                <span style="font-size: 11px; color: #475569;">Tillgängligt med Growth</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- LOCKED: Journey -->
+          <div>
+            <div class="section-label"><span class="icon">🔄</span><span class="text locked">Kandidatresa & konvertering</span><span class="badge-growth">GROWTH</span></div>
+            <div class="blur-wrap">
+              <div class="blur-content">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <div style="height: 24px; width: 100%; border-radius: 6px; background: rgba(99,102,241,0.15);"></div>
+                  <div style="height: 24px; width: 75%; border-radius: 6px; background: rgba(99,102,241,0.15);"></div>
+                  <div style="height: 24px; width: 36%; border-radius: 6px; background: rgba(99,102,241,0.15);"></div>
+                  <div style="height: 24px; width: 13%; min-width: 40px; border-radius: 6px; background: rgba(99,102,241,0.15);"></div>
+                  <div style="height: 24px; width: 8%; min-width: 40px; border-radius: 6px; background: rgba(99,102,241,0.15);"></div>
+                </div>
+              </div>
+              <div class="blur-overlay">
+                <div class="blur-lock">🔒</div>
+                <span style="font-size: 12px; font-weight: 600; color: #A5B4FC;">Konverteringsfunnel</span>
+                <span style="font-size: 11px; color: #475569;">Tillgängligt med Growth</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- LOCKED: Gaps -->
+          <div>
+            <div class="section-label"><span class="icon">🔍</span><span class="text locked">Kunskapsluckor</span><span class="badge-growth">GROWTH</span></div>
+            <div class="blur-wrap">
+              <div class="blur-content">
+                <div style="padding: 16px; border-radius: 10px; background: rgba(255,255,255,0.02);">
+                  <p style="font-size: 13px; color: #94A3B8;">Lönestruktur per roll — 6 frågor</p>
+                  <p style="font-size: 13px; color: #94A3B8; margin-top: 6px;">Detaljerade förmånspolicyer — 3 frågor</p>
+                </div>
+              </div>
+              <div class="blur-overlay">
+                <div class="blur-lock">🔒</div>
+                <span style="font-size: 12px; font-weight: 600; color: #A5B4FC;">3 kunskapsluckor hittade</span>
+                <span style="font-size: 11px; color: #475569;">Tillgängligt med Growth</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- LOCKED: Self-improvement -->
+          <div>
+            <div class="section-label"><span class="icon">🧠</span><span class="text locked">Self-improvement</span><span class="badge-growth">GROWTH</span></div>
+            <div class="blur-wrap">
+              <div class="blur-content">
+                <div style="padding: 16px; border-radius: 10px; background: rgba(255,255,255,0.02);">
+                  <p style="font-size: 13px; color: #94A3B8;">Vecka 1: 3 områden ✓</p>
+                  <p style="font-size: 13px; color: #94A3B8; margin-top: 6px;">Vecka 2: 3 områden ✓</p>
+                  <p style="font-size: 13px; color: #94A3B8; margin-top: 6px;">Vecka 3: 3 väntande...</p>
+                </div>
+              </div>
+              <div class="blur-overlay">
+                <div class="blur-lock">🔒</div>
+                <span style="font-size: 12px; font-weight: 600; color: #A5B4FC;">Agenten blir smartare varje vecka</span>
+                <span style="font-size: 11px; color: #475569;">Tillgängligt med Growth</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- GROWTH COLUMN -->
+      <div>
+        <div class="col-header col-header-growth">
+          <span style="font-size: 14px; font-weight: 700; color: #A5B4FC;">Growth</span>
+          <span style="font-size: 12px; color: #475569; margin-left: 8px;">15–35k SEK/mån</span>
+        </div>
+        <div class="col-body col-body-growth">
+
+          <!-- Stats -->
+          <div>
+            <div class="section-label"><span class="icon">📊</span><span class="text">Statistik + Lead-KPIs</span></div>
+            <div class="kpi-row">
+              <div class="kpi-box"><div class="kpi-num" style="color:#94A3B8;">118</div><div class="kpi-label">Konversationer</div></div>
+              <div class="kpi-box"><div class="kpi-num" style="color:#6366F1;">106</div><div class="kpi-label">Leads</div></div>
+              <div class="kpi-box"><div class="kpi-num" style="color:#A78BFA;">10</div><div class="kpi-label">Hög avsikt</div></div>
+              <div class="kpi-box"><div class="kpi-num" style="color:#22C55E;">91%</div><div class="kpi-label">Svar</div></div>
+            </div>
+          </div>
+
+          <!-- Topics + trending -->
+          <div>
+            <div class="section-label"><span class="icon">💬</span><span class="text">Ämnen + trender</span></div>
+            <div class="topic-row"><span style="font-size:12px;color:#334155;font-family:var(--mono);min-width:20px;">1.</span><span style="font-size:13px;color:#E2E8F0;flex:1;">Företagsinfo</span><span style="font-size:13px;color:#64748B;font-family:var(--mono);">37</span></div>
+            <div class="topic-row"><span style="font-size:12px;color:#334155;font-family:var(--mono);min-width:20px;">2.</span><span style="font-size:13px;color:#E2E8F0;flex:1;">Förmåner</span><span style="font-size:13px;color:#64748B;font-family:var(--mono);">30</span></div>
+            <div class="topic-row"><span style="font-size:12px;color:#334155;font-family:var(--mono);min-width:20px;">3.</span><span style="font-size:13px;color:#E2E8F0;flex:1;">Jobbförfrågan</span><span style="font-size:13px;color:#64748B;font-family:var(--mono);">20</span></div>
+            <div class="topic-row"><span style="font-size:12px;color:#334155;font-family:var(--mono);min-width:20px;">4.</span><span style="font-size:13px;color:#E2E8F0;flex:1;">Löner</span><span class="trending-tag">🔥 TRENDING</span><span style="font-size:13px;color:#64748B;font-family:var(--mono);">15</span></div>
+          </div>
+
+          <!-- Leads -->
+          <div>
+            <div class="section-label"><span class="icon">🎯</span><span class="text">Lead-identifiering</span></div>
+            <div class="lead-card">
+              <div class="lead-quote">"Jag tar min master från handels nu till våren och är intresserad av att jobba hos er"</div>
+              <div><span class="lead-dot"></span><span class="signal-tag">Utbildning</span><span class="signal-tag">Aktiv sökning</span><span class="signal-tag">Specifik ort</span></div>
+            </div>
+            <div class="lead-card">
+              <div class="lead-quote">"Jag jobbar som CFO idag. Funderar på att bli konsult."</div>
+              <div><span class="lead-dot"></span><span class="signal-tag">Senior profil</span><span class="signal-tag">Konsultintresse</span></div>
+            </div>
+            <div class="lead-card">
+              <div class="lead-quote">"Har 5 års erfarenhet som controller, passar jag?"</div>
+              <div><span class="lead-dot"></span><span class="signal-tag">Erfarenhet</span><span class="signal-tag">Självkvalificering</span></div>
+            </div>
+          </div>
+
+          <!-- Journey -->
+          <div>
+            <div class="section-label"><span class="icon">🔄</span><span class="text">Kandidatresa & konvertering</span></div>
+            <div class="funnel-row"><div class="funnel-bar" style="width:100%;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.12);">118</div><span class="funnel-label">Startade konversation</span></div>
+            <div class="funnel-row"><div class="funnel-bar" style="width:75%;background:rgba(99,102,241,0.13);border:1px solid rgba(99,102,241,0.15);">89</div><span class="funnel-label">Kvalificerande fråga</span></div>
+            <div class="funnel-row"><div class="funnel-bar" style="width:36%;background:rgba(99,102,241,0.17);border:1px solid rgba(99,102,241,0.18);">42</div><span class="funnel-label">Intresse specifik roll</span></div>
+            <div class="funnel-row"><div class="funnel-bar" style="width:13%;min-width:40px;background:rgba(99,102,241,0.22);border:1px solid rgba(99,102,241,0.22);">15</div><span class="funnel-label">Frågade hur man söker</span></div>
+            <div class="funnel-row"><div class="funnel-bar" style="width:10%;min-width:40px;background:linear-gradient(90deg,#6366F1,#8B5CF6);color:white;">10</div><span class="funnel-label" style="color:#E2E8F0;font-weight:600;">Lead med hög avsikt</span></div>
+            <p style="font-size:11px;color:#334155;margin-top:8px;font-style:italic;">8% konvertering till hög avsikt</p>
+          </div>
+
+          <!-- Gaps -->
+          <div>
+            <div class="section-label"><span class="icon">🔍</span><span class="text">Kunskapsluckor identifierade</span></div>
+            <div class="gap-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:13px;font-weight:600;color:#F59E0B;">Lönestruktur per roll</span>
+                <span style="font-size:11px;color:#475569;font-family:var(--mono);">6 frågor</span>
+              </div>
+              <p style="font-size:11px;color:#22C55E;margin-top:4px;">→ 2–3 fler leads/vecka</p>
+            </div>
+            <div class="gap-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:13px;font-weight:600;color:#F59E0B;">Detaljerade förmånspolicyer</span>
+                <span style="font-size:11px;color:#475569;font-family:var(--mono);">3 frågor</span>
+              </div>
+              <p style="font-size:11px;color:#22C55E;margin-top:4px;">→ Bättre kandidatupplevelse</p>
+            </div>
+            <div class="gap-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:13px;font-weight:600;color:#F59E0B;">Konkurrentjämförelse</span>
+                <span style="font-size:11px;color:#475569;font-family:var(--mono);">1 fråga</span>
+              </div>
+              <p style="font-size:11px;color:#22C55E;margin-top:4px;">→ Starkare positionering</p>
+            </div>
+          </div>
+
+          <!-- Self-improvement -->
+          <div>
+            <div class="section-label"><span class="icon">🧠</span><span class="text">Self-improvement</span></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <div style="width:8px;height:8px;border-radius:50%;background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,0.3);"></div>
+              <span style="font-size:12px;font-weight:600;color:#22C55E;font-family:var(--mono);">V.1–2</span>
+              <span style="font-size:11px;color:#64748B;">6 områden tränade</span>
+            </div>
+            <div style="padding-left:16px;margin-bottom:10px;">
+              <span class="tag-done">✓ Kontorsplatser</span>
+              <span class="tag-done">✓ Ansökningsprocess</span>
+              <span class="tag-done">✓ Förmåner</span>
+              <span class="tag-done">✓ Friskvård</span>
+              <span class="tag-done">✓ Löneintervall</span>
+              <span class="tag-done">✓ Testimonials</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <div style="width:8px;height:8px;border-radius:50%;background:#6366F1;box-shadow:0 0 6px rgba(99,102,241,0.3);"></div>
+              <span style="font-size:12px;font-weight:600;color:#A5B4FC;font-family:var(--mono);">V.3</span>
+              <span style="font-size:11px;color:#64748B;">3 förbättringar väntar</span>
+            </div>
+            <div style="padding-left:16px;margin-bottom:12px;">
+              <span class="tag-pending">◌ Lönestruktur per roll</span>
+              <span class="tag-pending">◌ Detaljerade förmånspolicyer</span>
+              <span class="tag-pending">◌ Konkurrentjämförelse</span>
+            </div>
+
+            <!-- Progress bar -->
+            <div style="padding:12px 14px;border-radius:10px;background:rgba(255,255,255,0.02);">
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:11px;color:#64748B;">Kunskapstäckning</span>
+                <span style="font-size:11px;font-family:var(--mono);"><span style="color:#22C55E;">6</span><span style="color:#334155;"> / </span><span style="color:#818CF8;">9</span></span>
+              </div>
+              <div class="progress-track">
+                <div style="width:67%;background:linear-gradient(90deg,#22C55E,#4ADE80);border-radius:3px 0 0 3px;"></div>
+                <div style="width:33%;background:rgba(99,102,241,0.3);border-radius:0 3px 3px 0;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CTA -->
+          <div class="cta-box">
+            <p style="font-size:12px;font-weight:600;color:#A5B4FC;margin-bottom:4px;">Rekommenderad åtgärd</p>
+            <p style="font-size:15px;color:#F1F5F9;font-family:var(--serif);margin-bottom:8px;">Lägg till lönestruktur per roll</p>
+            <div style="display:flex;gap:16px;">
+              <span style="font-size:11px;color:#64748B;">Påverkade: <strong style="color:#E2E8F0;font-family:var(--mono);">6</strong> frågor</span>
+              <span style="font-size:11px;color:#64748B;">Effekt: <strong style="color:#22C55E;font-family:var(--mono);">2–3 fler leads/v</strong></span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ BASE ONLY VIEW ═══════════ -->
+  <div id="tab-base" class="tab-content">
+    <div style="max-width: 600px; margin: 0 auto;">
+      <div class="card" style="padding: 32px;">
+        <p style="font-size: 18px; color: #F1F5F9; font-family: var(--serif); margin-bottom: 24px;">Det här är allt du ser med Base:</p>
+
+        <div style="display: flex; gap: 16px; margin-bottom: 24px;">
+          <div style="flex:1;padding:20px;border-radius:12px;background:rgba(255,255,255,0.025);text-align:center;">
+            <div style="font-size:36px;font-weight:700;color:#94A3B8;font-family:var(--mono);">118</div>
+            <div style="font-size:12px;color:#475569;margin-top:4px;">Konversationer</div>
+          </div>
+          <div style="flex:1;padding:20px;border-radius:12px;background:rgba(255,255,255,0.025);text-align:center;">
+            <div style="font-size:36px;font-weight:700;color:#94A3B8;font-family:var(--mono);">91%</div>
+            <div style="font-size:12px;color:#475569;margin-top:4px;">Svarsfrekvens</div>
+          </div>
+        </div>
+
+        <p style="font-size:13px;color:#475569;margin-bottom:8px;">Top ämnen:</p>
+        <p style="font-size:13px;color:#94A3B8;margin-bottom:4px;">Företagsinfo: 37</p>
+        <p style="font-size:13px;color:#94A3B8;margin-bottom:4px;">Förmåner: 30</p>
+        <p style="font-size:13px;color:#94A3B8;margin-bottom:4px;">Jobbförfrågan: 20</p>
+        <p style="font-size:13px;color:#94A3B8;margin-bottom:4px;">Löner: 15</p>
+
+        <div style="margin:32px 0;height:1px;background:rgba(255,255,255,0.06);"></div>
+
+        <p style="font-size:16px;color:#F59E0B;font-family:var(--serif);margin-bottom:12px;">Men du ser inte...</p>
+
+        <div class="miss-item"><span class="miss-x">✕</span><span style="font-size:13px;color:#94A3B8;line-height:1.5;">Vilka av de 118 besökarna som var redo att köpa</span></div>
+        <div class="miss-item"><span class="miss-x">✕</span><span style="font-size:13px;color:#94A3B8;line-height:1.5;">Att 10 kandidater beskrev sin profil och ville söka</span></div>
+        <div class="miss-item"><span class="miss-x">✕</span><span style="font-size:13px;color:#94A3B8;line-height:1.5;">Att agenten inte kan svara på lönefrågor (6 missade)</span></div>
+        <div class="miss-item"><span class="miss-x">✕</span><span style="font-size:13px;color:#94A3B8;line-height:1.5;">Var i konversationen besökare tappar intresset</span></div>
+        <div class="miss-item"><span class="miss-x">✕</span><span style="font-size:13px;color:#94A3B8;line-height:1.5;">Att ingen frågar om hållbarhet (en blind spot)</span></div>
+        <div class="miss-item"><span class="miss-x">✕</span><span style="font-size:13px;color:#94A3B8;line-height:1.5;">Att agenten kunde ha 3 nya kunskapsområden nästa vecka</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ GROWTH ONLY VIEW ═══════════ -->
+  <div id="tab-growth" class="tab-content">
+    <div style="max-width: 600px; margin: 0 auto;">
+      <div class="card card-growth" style="padding: 32px; position: relative; overflow: hidden;">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#6366F1,#8B5CF6);"></div>
+
+        <p style="font-size:18px;color:#F1F5F9;font-family:var(--serif);margin-bottom:8px;">Samma 118 konversationer. Här är vad Growth avslöjar:</p>
+        <p style="font-size:13px;color:#475569;margin-bottom:24px;">All data existerar redan — det enda som skiljer är analyslagret.</p>
+
+        <div class="reveal-item">
+          <span class="reveal-icon">🎯</span>
+          <div><p style="font-size:14px;font-weight:600;color:#6366F1;margin-bottom:2px;">106 leads identifierade</p><p style="font-size:12px;color:#64748B;line-height:1.5;">varav 10 med hög avsikt — redo för uppföljning idag</p></div>
+        </div>
+        <div class="reveal-item">
+          <span class="reveal-icon">🔄</span>
+          <div><p style="font-size:14px;font-weight:600;color:#A78BFA;margin-bottom:2px;">Konverteringsfunnel kartlagd</p><p style="font-size:12px;color:#64748B;line-height:1.5;">8% av besökare till hög avsikt — du ser exakt var drop-off sker</p></div>
+        </div>
+        <div class="reveal-item">
+          <span class="reveal-icon">🔍</span>
+          <div><p style="font-size:14px;font-weight:600;color:#F59E0B;margin-bottom:2px;">3 kunskapsluckor hittade</p><p style="font-size:12px;color:#64748B;line-height:1.5;">Lönestruktur, förmånspolicyer, konkurrentjämförelse — löses med ett klick</p></div>
+        </div>
+        <div class="reveal-item">
+          <span class="reveal-icon">🔇</span>
+          <div><p style="font-size:14px;font-weight:600;color:#F59E0B;margin-bottom:2px;">2 blind spots identifierade</p><p style="font-size:12px;color:#64748B;line-height:1.5;">Ingen frågar om hållbarhet eller mångfald — kan stärka ert employer brand</p></div>
+        </div>
+        <div class="reveal-item">
+          <span class="reveal-icon">🧠</span>
+          <div><p style="font-size:14px;font-weight:600;color:#22C55E;margin-bottom:2px;">6 områden inlärda, 3 väntande</p><p style="font-size:12px;color:#64748B;line-height:1.5;">Agenten blir mätbart bättre varje vecka utan manuellt arbete</p></div>
+        </div>
+        <div class="reveal-item">
+          <span class="reveal-icon">📊</span>
+          <div><p style="font-size:14px;font-weight:600;color:#A5B4FC;margin-bottom:2px;">Veckorapport med actionable insights</p><p style="font-size:12px;color:#64748B;line-height:1.5;">Intelligence briefing levererad automatiskt — inte rådata, utan analys</p></div>
+        </div>
+
+        <div style="margin-top:24px;padding:16px 20px;border-radius:12px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.1);text-align:center;">
+          <p style="font-size:14px;color:#F1F5F9;font-family:var(--serif);">
+            Allt ovan kommer från <strong>samma konversationer</strong> som Base.<br>
+            <span style="color:#A5B4FC;">Skillnaden är vad du gör med datan.</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="padding: 48px 0 40px; text-align: center;">
+    <p style="font-size: 11px; color: #1E293B;">AgentLoop • Powered by Life Inside</p>
+  </div>
+
+</div>
+
+<script>
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+
+</body>
+</html>
